@@ -55,6 +55,33 @@ functions:
           method:  options
           cors:    true
 
+
+  register:
+    handler: src/auth/register.handler
+    description: Register new user with email/password
+    events:
+      - http:
+          path:    auth/register
+          method:  post
+          cors:    true
+      - http:
+          path:    auth/register
+          method:  options
+          cors:    true
+
+  login:
+    handler: src/auth/login.handler
+    description: Login with email/password
+    events:
+      - http:
+          path:    auth/login
+          method:  post
+          cors:    true
+      - http:
+          path:    auth/login
+          method:  options
+          cors:    true
+
   # ── Users ─────────────────────────────────────────────────────────────────
   getProfile:
     handler: src/users/getProfile.handler
@@ -65,6 +92,20 @@ functions:
           method:        get
           cors:          true
           authorizer:    aws_iam
+
+
+  updateProfile:
+    handler: src/users/updateProfile.handler
+    description: Update authenticated user's profile
+    events:
+      - http:
+          path:    users/me
+          method:  put
+          cors:    true
+      - http:
+          path:    users/me
+          method:  options
+          cors:    true
 
   # ── Progress ──────────────────────────────────────────────────────────────
   markProblem:
@@ -123,6 +164,8 @@ resources:
             AttributeType: S
           - AttributeName: googleId
             AttributeType: S
+          - AttributeName: email
+            AttributeType: S
         KeySchema:
           - AttributeName: userId
             KeyType: HASH
@@ -130,6 +173,12 @@ resources:
           - IndexName: googleId-index
             KeySchema:
               - AttributeName: googleId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: email-index
+            KeySchema:
+              - AttributeName: email
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
