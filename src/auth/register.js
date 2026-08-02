@@ -3,14 +3,15 @@
 /**
  * POST /auth/register
  *
- * Body: { name, email, mobile, password, confirmPassword }
+ * Body: { username, name, email, mobile, password, confirmPassword }
  *
  * Flow:
- *   1. Validate all fields (required, password length, email format, passwords match)
- *   2. Check if user with email already exists via GSI
- *   3. Hash password with bcryptjs
- *   4. Create user record with email auth provider
- *   5. Return JWT + user (without passwordHash)
+ *   1. Validate all fields (required, password length, email format, passwords match, username format)
+ *   2. Check if email already exists via GSI
+ *   3. Check if username already exists via GSI
+ *   4. Hash password with bcryptjs
+ *   5. Create user record with email auth provider
+ *   6. Return JWT + user (without passwordHash)
  */
 
 const bcrypt = require('bcryptjs');
@@ -29,16 +30,26 @@ const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
+const validateUsername = (username) => {
+  // 3-20 chars, lowercase letters, numbers, underscores, dots only
+  const usernameRegex = /^[a-z0-9_.]{3,20}$/;
+  return usernameRegex.test(username);
+};
+
 module.exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return preflight();
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { name, email, mobile, password, confirmPassword } = body;
+    const { username, name, email, mobile, password, confirmPassword } = body;
 
     // ── 1. Validate input ─────────────────────────────────────────────────
-    if (!name || !email || !mobile || !password || !confirmPassword) {
-      return badRequest('All fields are required (name, email, mobile, password, confirmPassword)');
+    if (!username || !name || !email || !mobile || !password || !confirmPassword) {
+      return badRequest('All fields are required (username, name, email, mobile, password, confirmPassword)');
+    }
+
+    if (!validateUsername(username)) {
+      return badRequest('Username must be 3-20 characters, lowercase letters, numbers, underscores, or dots only');
     }
 
     if (!validateEmail(email)) {
@@ -54,26 +65,39 @@ module.exports.handler = async (event) => {
     }
 
     // ── 2. Check if email already exists ──────────────────────────────────
-    const existingUsers = await queryItems(
+    const existingEmail = await queryItems(
       TABLES.USERS,
       'email-index',
       'email = :email',
       { ':email': email }
     );
 
-    if (existingUsers.length > 0) {
+    if (existingEmail.length > 0) {
       return badRequest('Email already registered');
     }
 
-    // ── 3. Hash password ──────────────────────────────────────────────────
+    // ── 3. Check if username already exists ───────────────────────────────
+    const existingUsername = await queryItems(
+      TABLES.USERS,
+      'username-index',
+      'username = :username',
+      { ':username': username }
+    );
+
+    if (existingUsername.length > 0) {
+      return badRequest('Username already taken');
+    }
+
+    // ── 4. Hash password ──────────────────────────────────────────────────
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // ── 4. Create user record ─────────────────────────────────────────────
+    // ── 5. Create user record ─────────────────────────────────────────────
     const now = new Date().toISOString();
     const userId = uuidv4();
 
     const user = {
       userId,
+      username,
       name,
       email,
       mobile,
@@ -85,7 +109,7 @@ module.exports.handler = async (event) => {
 
     await putItem(TABLES.USERS, user);
 
-    // ── 5. Issue JWT ──────────────────────────────────────────────────────
+    // ── 6. Issue JWT ──────────────────────────────────────────────────────
     const token = issueJwt(userId, email);
 
     // Remove passwordHash before sending response
