@@ -3,11 +3,12 @@
 /**
  * POST /auth/login
  *
- * Body: { email, password }
+ * Body: { identifier, password }
+ *   - identifier can be email OR username
  *
  * Flow:
  *   1. Validate input
- *   2. Look up user by email via GSI
+ *   2. Look up user by email or username via GSI
  *   3. Compare password with bcrypt
  *   4. Update lastLoginAt
  *   5. Return JWT + user (without passwordHash)
@@ -28,37 +29,52 @@ module.exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { email, password } = body;
+    const { email, password, identifier } = body;
+
+    // Support both 'identifier' (new) and 'email' (backward compat)
+    const loginId = identifier || email;
 
     // ── 1. Validate input ─────────────────────────────────────────────────
-    if (!email || !password) {
-      return badRequest('Email and password are required');
+    if (!loginId || !password) {
+      return badRequest('Email/username and password are required');
     }
 
-    // ── 2. Look up user by email ──────────────────────────────────────────
-    const users = await queryItems(
-      TABLES.USERS,
-      'email-index',
-      'email = :email',
-      { ':email': email }
-    );
+    // ── 2. Determine if identifier is email or username ───────────────────
+    const isEmail = loginId.includes('@');
+    let users;
+
+    if (isEmail) {
+      users = await queryItems(
+        TABLES.USERS,
+        'email-index',
+        'email = :val',
+        { ':val': loginId }
+      );
+    } else {
+      users = await queryItems(
+        TABLES.USERS,
+        'username-index',
+        'username = :val',
+        { ':val': loginId.toLowerCase() }
+      );
+    }
 
     if (users.length === 0) {
-      return unauthorized('Invalid email or password');
+      return unauthorized('Invalid credentials');
     }
 
     const user = users[0];
 
     // Check if this is an email/password user
     if (user.authProvider !== 'email' || !user.passwordHash) {
-      return unauthorized('Invalid email or password');
+      return unauthorized('This account uses Google sign-in. Please use "Continue with Google".');
     }
 
     // ── 3. Compare password ───────────────────────────────────────────────
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
 
     if (!isValidPassword) {
-      return unauthorized('Invalid email or password');
+      return unauthorized('Invalid credentials');
     }
 
     // ── 4. Update lastLoginAt ─────────────────────────────────────────────
