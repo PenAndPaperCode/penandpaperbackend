@@ -1,0 +1,25 @@
+{
+  "name": "pen-and-paper-backend",
+  "version": "1.0.0",
+  "description": "Serverless backend for PenAndPaper interview prep app",
+  "main": "index.js",
+  "scripts": {
+    "start": "serverless offline",
+    "deploy": "serverless deploy --aws-profile myprofile",
+    "deploy:prod": "serverless deploy --stage prod --aws-profile myprofile",
+    "remove": "serverless remove --aws-profile myprofile",
+    "logs": "serverless logs -f googleAuth --aws-profile myprofile"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "google-auth-library": "^9.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-dotenv-plugin": "^6.0.0",
+    "serverless-offline": "^12.0.4"
+  }
+}

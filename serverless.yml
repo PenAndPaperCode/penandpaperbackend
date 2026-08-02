@@ -1,0 +1,176 @@
+service: pen-and-paper-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  timeout: 15
+  memorySize: 256
+
+  environment:
+    USERS_TABLE:      pen-and-paper-users-${self:provider.stage}
+    PROGRESS_TABLE:   pen-and-paper-progress-${self:provider.stage}
+    JWT_SECRET:       ${env:JWT_SECRET}
+    JWT_EXPIRES_IN:   ${env:JWT_EXPIRES_IN, '7d'}
+    GOOGLE_CLIENT_ID: ${env:GOOGLE_CLIENT_ID}
+    ALLOWED_ORIGIN:   ${env:ALLOWED_ORIGIN, '*'}
+    NODE_ENV:         ${self:provider.stage}
+    AWS_ACCOUNT_ID:   "158527855869"
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:ap-south-1:158527855869:table/pen-and-paper-users-${self:provider.stage}
+            - arn:aws:dynamodb:ap-south-1:158527855869:table/pen-and-paper-users-${self:provider.stage}/index/*
+            - arn:aws:dynamodb:ap-south-1:158527855869:table/pen-and-paper-progress-${self:provider.stage}
+            - arn:aws:dynamodb:ap-south-1:158527855869:table/pen-and-paper-progress-${self:provider.stage}/index/*
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-offline
+
+functions:
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+  googleAuth:
+    handler: src/auth/googleAuth.handler
+    description: Verify Google ID token, upsert user, return JWT
+    events:
+      - http:
+          path:    auth/google
+          method:  post
+          cors:    true
+      - http:
+          path:    auth/google
+          method:  options
+          cors:    true
+
+  # ── Users ─────────────────────────────────────────────────────────────────
+  getProfile:
+    handler: src/users/getProfile.handler
+    description: Get authenticated user's profile
+    events:
+      - http:
+          path:          users/me
+          method:        get
+          cors:          true
+          authorizer:    aws_iam
+
+  # ── Progress ──────────────────────────────────────────────────────────────
+  markProblem:
+    handler: src/progress/markProblem.handler
+    description: Mark a problem as done or undone
+    events:
+      - http:
+          path:    progress/mark
+          method:  post
+          cors:    true
+      - http:
+          path:    progress/mark
+          method:  options
+          cors:    true
+
+  getProgress:
+    handler: src/progress/getProgress.handler
+    description: Get all solved problems for the user (doneStatus map)
+    events:
+      - http:
+          path:    progress
+          method:  get
+          cors:    true
+      - http:
+          path:    progress
+          method:  options
+          cors:    true
+
+  getStats:
+    handler: src/progress/getStats.handler
+    description: Get summary stats — total solved, by category, last activity
+    events:
+      - http:
+          path:    progress/stats
+          method:  get
+          cors:    true
+      - http:
+          path:    progress/stats
+          method:  options
+          cors:    true
+
+resources:
+  Resources:
+
+    # ── Users Table ──────────────────────────────────────────────────────────
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: pen-and-paper-users-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: googleId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: googleId-index
+            KeySchema:
+              - AttributeName: googleId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        Tags:
+          - Key: Project
+            Value: pen-and-paper
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    # ── Progress Table ───────────────────────────────────────────────────────
+    ProgressTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: pen-and-paper-progress-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: problemKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: problemKey
+            KeyType: RANGE
+        Tags:
+          - Key: Project
+            Value: pen-and-paper
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+  Outputs:
+    ApiGatewayUrl:
+      Description: API Gateway base URL
+      Value:
+        Fn::Join:
+          - ''
+          - - 'https://'
+            - Ref: ApiGatewayRestApi
+            - '.execute-api.ap-south-1.amazonaws.com/'
+            - ${self:provider.stage}
