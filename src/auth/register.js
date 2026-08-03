@@ -102,6 +102,7 @@ module.exports.handler = async (event) => {
       email,
       mobile,
       passwordHash,
+      role: 'customer',
       authProvider: 'email',
       createdAt: now,
       lastLoginAt: now,

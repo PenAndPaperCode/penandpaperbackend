@@ -86,8 +86,9 @@ module.exports.handler = async (event) => {
         email,
         name,
         picture,
-mobile§        mobile: '',
-authProvider§        authProvider: 'google',
+        mobile: '',
+        role: 'customer',
+        authProvider: 'google',
         createdAt: now,
         lastLoginAt: now,
       };

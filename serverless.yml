@@ -107,6 +107,20 @@ functions:
           method:  options
           cors:    true
 
+  # ── Admin ─────────────────────────────────────────────────────────────────
+  getUsers:
+    handler: src/admin/getUsers.handler
+    description: Admin - Get all users
+    events:
+      - http:
+          path:    admin/users
+          method:  get
+          cors:    true
+      - http:
+          path:    admin/users
+          method:  options
+          cors:    true
+
   # ── Progress ──────────────────────────────────────────────────────────────
   markProblem:
     handler: src/progress/markProblem.handler
